@@ -1,0 +1,11 @@
+aiogram==3.22.0
+APScheduler==3.11.0
+pydantic-settings==2.11.0
+SQLAlchemy==2.0.43
+aiosqlite==0.21.0
+cryptography==46.0.2
+requests==2.32.5
+pyTelegramBotAPI==4.29.1
+python-telegram-bot==22.5
+transliterate==1.10.2
+tenacity==9.1.2
