@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 
 import aiofiles
 from aiogram.types import Message, FSInputFile
@@ -41,19 +42,47 @@ async def projects_tracking(user: User, message: Message, db_session: AsyncSessi
             
             if project.get("id") not in json.loads(user.kwork_session.last_projects):
                 for file in project.get("files"):
-                    content = await kwork.get_file_content(url=file["url"])
-                    filepath = f"temp/{file['fname']}"
+                    attempts = 0
+                    max_attempts = 3
+                    success_send = False
                     
-                    async with aiofiles.open(filepath, "wb") as file:
-                        await file.write(content)
+                    while attempts < max_attempts:
+                        try:
+                            # Скачивание файла
+                            content = await kwork.get_file_content(url=file["url"])
+                            filepath = f"temp/{file['fname']}"
+                            
+                            async with aiofiles.open(filepath, "wb") as f:
+                                await f.write(content)
+                            
+                            # Отправка документа
+                            await message.answer_document(
+                                document=FSInputFile(filepath),
+                                caption=loc.remove_emojis(project['name'])
+                            )
+                            
+                            os.remove(filepath)
+                            attachment = True
+                            success_send = True
+                            break  # Успех, выходим из цикла
+                        
+                        except Exception as e:
+                            attempts += 1
+                            print(f"Попытка {attempts}/{max_attempts} для файла {file['fname']} провалилась: {e}")
+                            if os.path.exists(filepath):
+                                os.remove(filepath)  # Очистка, если файл частично записан
+                            
+                            if attempts < max_attempts:
+                                await asyncio.sleep(2)  # Пауза 2 секунды перед следующей попыткой
+                            else:
+                                # Финальная ошибка после всех попыток
+                                await message.answer(
+                                    text=f"Не удалось отправить вложение '{file['fname']}' после {max_attempts} попыток. Ошибка: {str(e)}"
+                                )
                     
-                    await message.answer_document(
-                        document=FSInputFile(filepath),
-                        caption=loc.remove_emojis(project['name'])
-                    )
-                    os.remove(filepath)
-                    attachment = True
-                    
+                    if not success_send:
+                        # Если не удалось отправить, можно продолжить без attachment или пропустить
+                
                 await message.answer(
                     text=loc.project_info(project, attachment), 
                     reply_markup=kb.project_keyboard(project_id=project["id"]), 
